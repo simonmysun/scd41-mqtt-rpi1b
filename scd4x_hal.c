@@ -39,9 +39,9 @@ int scd4x_write(__u16 command, __u16 datum) {
     return 1;
   }
   char buf[3];
-  buf[0] = datum & 0xff00 >> 8;
+  buf[0] = (datum & 0xff00) >> 8;
   buf[1] = datum & 0x00ff;
-  buf[3] = crc(buf, 2);
+  buf[2] = crc(buf, 2);
   printf("write 0x%02x 0x%02x 0x%02x\n", buf[0], buf[1], buf[2]);
   if (write(device, buf, 3) != 3) {
     printf("write fails\n");
@@ -58,6 +58,10 @@ int scd4x_read(__u16 command, __u8* data, int length) {
   if (read(device, data, length) != length) {
     printf("read fails\n");
   }
+  for (int i = 0; i < length; i += 1) {
+    printf("0x%02x ", data[i]);
+  }
+  printf("\n");
   for (int i = 0; i < length; i += 3) {
     if (crc(data + i, 2) != data[i + 2]) {
       printf("crc fails on %d", i);
