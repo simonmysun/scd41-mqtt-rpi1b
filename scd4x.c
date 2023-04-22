@@ -3,7 +3,7 @@
 int start_periodic_measurement() {
   int ret = scd4x_send_command(0x21b1);
   if(ret != 0) {
-    printf("start_periodic_measurement failed");
+    printf("start_periodic_measurement failed\n");
     return 1;
   }
   return 0;
@@ -13,7 +13,7 @@ int read_measurement(__u16* co2_concentration, float* temperature, float* relati
   __u8 buffer[10];
   int ret = scd4x_read(0xec05, buffer, 9);
   if(ret != 0) {
-    printf("read_measurement failed");
+    printf("read_measurement failed\n");
     return 1;
   }
   *co2_concentration = buffer[0];
@@ -33,7 +33,7 @@ int read_measurement(__u16* co2_concentration, float* temperature, float* relati
 int stop_periodic_measurement() {
   int ret = scd4x_send_command(0x3f86);
   if(ret != 0) {
-    printf("stop_periodic_measurement failed");
+    printf("stop_periodic_measurement failed\n");
     return 1;
   }
   return 0;
@@ -42,7 +42,7 @@ int stop_periodic_measurement() {
 int set_temperature_offset(float temperature_offset) {
   int ret = scd4x_write(0x241d, (__u16)(0x10000 * temperature_offset / 175));
   if(ret != 0) {
-    printf("set_temperature_offset failed");
+    printf("set_temperature_offset failed\n");
     return 1;
   }
   return 0;
@@ -52,7 +52,7 @@ int get_temperature_offset(float* temperature_offset) {
   __u8 buffer[4];
   int ret = scd4x_read(0x2318, buffer, 3);
   if(ret != 0) {
-    printf("get_temperature_offset failed");
+    printf("get_temperature_offset failed\n");
     return 1;
   }
   *temperature_offset = buffer[0];
@@ -65,7 +65,7 @@ int get_temperature_offset(float* temperature_offset) {
 int set_sensor_altitude(__u16 altitude) {
   int ret = scd4x_write(0x2427, altitude);
   if(ret != 0) {
-    printf("set_sensor_altitude failed");
+    printf("set_sensor_altitude failed\n");
     return 1;
   }
   return 0;
@@ -75,7 +75,7 @@ int get_sensor_altitude(__u16* altitude) {
   __u8 buffer[4];
   int ret = scd4x_read(0x2322, buffer, 3);
   if(ret != 0) {
-    printf("get_sensor_altitude failed");
+    printf("get_sensor_altitude failed\n");
     return 1;
   }
   *altitude = buffer[0];
@@ -87,7 +87,7 @@ int get_sensor_altitude(__u16* altitude) {
 int set_ambient_pressure(__u16 ambient_pressure) {
   int ret = scd4x_write(0xe000, ambient_pressure);
   if(ret != 0) {
-    printf("set_ambient_pressure failed");
+    printf("set_ambient_pressure failed\n");
     return 1;
   }
   return 0;
@@ -97,7 +97,7 @@ int perform_forced_recalibration(__u16 target_co2_concentration, __u16* frc_corr
   __u8 buffer[4];
   int ret = scd4x_send_and_fetch(0x362f, target_co2_concentration, buffer, 3);
   if(ret != 0) {
-    printf("perform_forced_recalibration failed");
+    printf("perform_forced_recalibration failed\n");
     return 1;
   }
   *frc_correction = buffer[0];
@@ -109,7 +109,7 @@ int perform_forced_recalibration(__u16 target_co2_concentration, __u16* frc_corr
 int set_automatic_self_calibration_enabled(__u16 asc_enabled) {
   int ret = scd4x_write(0x2416, asc_enabled);
   if(ret != 0) {
-    printf("set_automatic_self_calibration_enabled failed");
+    printf("set_automatic_self_calibration_enabled failed\n");
     return 1;
   }
   return 0;
@@ -119,7 +119,7 @@ int get_automatic_self_calibration_enabled(__u16* asc_enabled) {
   __u8 buffer[4];
   int ret = scd4x_read(0x2313, buffer, 3);
   if(ret != 0) {
-    printf("get_automatic_self_calibration_enabled failed");
+    printf("get_automatic_self_calibration_enabled failed\n");
     return 1;
   }
   *asc_enabled = buffer[0];
@@ -131,7 +131,7 @@ int get_automatic_self_calibration_enabled(__u16* asc_enabled) {
 int start_low_power_periodic_measurement() {
   int ret = scd4x_send_command(0x21ac);
   if(ret != 0) {
-    printf("start_low_power_periodic_measurement failed");
+    printf("start_low_power_periodic_measurement failed\n");
     return 1;
   }
   return 0;
@@ -141,7 +141,7 @@ int get_data_ready_status(__u16* signal) {
   __u8 buffer[4];
   int ret = scd4x_read(0xe4b8, buffer, 3);
   if(ret != 0) {
-    printf("get_data_ready_status failed");
+    printf("get_data_ready_status failed\n");
     return 1;
   }
   *signal = buffer[0];
@@ -153,7 +153,7 @@ int get_data_ready_status(__u16* signal) {
 int persist_settings() {
   int ret = scd4x_send_command(0x3615);
   if(ret != 0) {
-    printf("persist_settings failed");
+    printf("persist_settings failed\n");
     return 1;
   }
   return 0;
@@ -163,7 +163,7 @@ int get_serial_number(__u16* serial_number_0, __u16* serial_number_1, __u16* ser
   __u8 buffer[10];
   int ret = scd4x_read(0x3682, buffer, 9);
   if(ret != 0) {
-    printf("get_serial_number failed");
+    printf("get_serial_number failed\n");
     return 1;
   }
   *serial_number_0 = buffer[0];
@@ -182,7 +182,7 @@ int perform_self_test(__u16* sensor_status) {
   __u8 buffer[4];
   int ret = scd4x_read(0x3639, buffer, 3);
   if(ret != 0) {
-    printf("perform_self_test failed");
+    printf("perform_self_test failed\n");
     return 1;
   }
   *sensor_status = buffer[0];
@@ -194,7 +194,7 @@ int perform_self_test(__u16* sensor_status) {
 int perform_factory_reset() {
   int ret = scd4x_send_command(0x3632);
   if(ret != 0) {
-    printf("perform_factory_reset failed");
+    printf("perform_factory_reset failed\n");
     return 1;
   }
   return 0;
@@ -203,7 +203,7 @@ int perform_factory_reset() {
 int reinit() {
   int ret = scd4x_send_command(0x3646);
   if(ret != 0) {
-    printf("reinit failed");
+    printf("reinit failed\n");
     return 1;
   }
   return 0;
@@ -213,7 +213,7 @@ int reinit() {
 int measure_single_shot() {
   int ret = scd4x_send_command(0x219d);
   if(ret != 0) {
-    printf("measure_single_shot failed");
+    printf("measure_single_shot failed\n");
     return 1;
   }
   return 0;
@@ -222,7 +222,7 @@ int measure_single_shot() {
 int measure_single_shot_rht_only() {
   int ret = scd4x_send_command(0x2196);
   if(ret != 0) {
-    printf("measure_single_shot_rht_only failed");
+    printf("measure_single_shot_rht_only failed\n");
     return 1;
   }
   return 0;
