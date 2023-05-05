@@ -92,8 +92,7 @@ share internet
 echo "1" > /proc/sys/net/ipv4/ip_forward
 ```
 
-提示：
-上面这个命令也可以通过修改/etc/sysctl.conf实现，在文件中加上或修改：net.ipv4.ip_forward=1
+add `net.ipv4.ip_forward=1` to `/etc/sysctl.conf` to make this change permanent
 
 enable NAT with `iptables`
 
@@ -112,7 +111,7 @@ the Pi shoud be able to access internet now.
 
 ## read data from sensor
 
-enable i2c in `sudo raspi-config`
+enable i2c in `sudo raspi-config`, connect to corresponding pins (I'm using Pin 3, 4, 5, 6) ([ref](https://pinout.xyz/pinout/i2c)), restart pi
 
 ``` bash
 
@@ -251,6 +250,11 @@ int reinit();
 int measure_single_shot();
 int measure_single_shot_rht_only();
 ```
+
+Note: It seems that writing data to the sensor does not work now. But I currently don't have much need to do so. Will fix it in the future.
+
+
+
 
 ## ref
 
