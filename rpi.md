@@ -253,10 +253,21 @@ int measure_single_shot_rht_only();
 
 Note: It seems that writing data to the sensor does not work now. But I currently don't have much need to do so. Will fix it in the future.
 
+now we can read our sensor data:
 
+```c
+char buff[512]
+__u16 co2_concentration;
+float temperature;
+float relative_humidity;
+time_t ltime;
+read_measurement(&co2_concentration, &temperature, &relative_humidity);
+ltime = time(NULL);
+sprintf(buff, "%s:CO_2=%dppm,T=%fC,RH=%f%%\n", strtok(asctime(localtime(&ltime)), "\n"),
+        co2_concentration, temperature, relative_humidity);
+printf("%s", buff);
+```
 
+`time()` requires `time.h` and `strtok` requires `string.h`, these are for printing a well looking timestamp.
 
-## ref
-
-https://github.com/mqtt/mqtt.org/wiki/libraries
-https://github.com/eclipse/paho.mqtt.c
+## publish to mqtt server
