@@ -1,7 +1,10 @@
-## drivers from source
+
+## configure wifi adapter for raspberry pi (this chapter is full of failures and can be skipped. )
+this chapter is full of failures and can be skipped. I leave it here just in case some one wants to give a try and can use some of the information.
+### drivers from source
 https://github.com/fastoe drivers doesn't work
 
-## precompiled drivers
+### precompiled drivers
 using http://downloads.fars-robotics.net/wifi-drivers/8822bu-drivers/
 
 downgrade kernel to 5.10.73+ with `rpi-update 9fe1e973b550019bd6a87966db8443a70b991129` ([ref](https://github.com/Hexxeh/rpi-firmware/blob/9fe1e973b550019bd6a87966db8443a70b991129/uname_string), [ref](https://raspberrypi.stackexchange.com/questions/19959/how-to-get-a-specific-kernel-version-for-raspberry-pi-linux))
@@ -16,7 +19,7 @@ install-wifi
 
 Failed. system hang after wlan0 read
 
-## older kernel with precompiled drivers
+### older kernel with precompiled drivers
 image from https://downloads.raspberrypi.org/raspbian_lite/images/raspbian_lite-2020-02-14/
 
 using `dd` to flash image
@@ -260,14 +263,113 @@ char buff[512]
 __u16 co2_concentration;
 float temperature;
 float relative_humidity;
-time_t ltime;
 read_measurement(&co2_concentration, &temperature, &relative_humidity);
-ltime = time(NULL);
-sprintf(buff, "%s:CO_2=%dppm,T=%fC,RH=%f%%\n", strtok(asctime(localtime(&ltime)), "\n"),
-        co2_concentration, temperature, relative_humidity);
+sprintf(buff, "CO_2=%dppm,T=%fC,RH=%f%%\n", co2_concentration, temperature, relative_humidity);
 printf("%s", buff);
 ```
 
-`time()` requires `time.h` and `strtok` requires `string.h`, these are for printing a well looking timestamp.
 
 ## publish to mqtt server
+here we use mosquitto to publish to my mqtt server. The server side is also mosquitto so I use it again in client side.
+
+```bash
+apt install libmosquitto-dev
+```
+
+include the header
+
+```c
+#include <mosquitto.h>
+```
+
+get the server information from environment variables
+
+```c
+char* mqtt_host = getenv("MQTT_HOST");
+char* mqtt_port_s = getenv("MQTT_PORT");
+char* mqtt_username = getenv("MQTT_USERNAME");
+char* mqtt_password = getenv("MQTT_PASSWORD");
+if (mqtt_host == NULL || mqtt_port_s == NULL || mqtt_username == NULL ||
+    mqtt_password == NULL) {
+  printf(
+      "one of the environment varabiles not set: MQTT_HOST, MQTT_PORT, "
+      "MQTT_USERNAME, MQTT_PASSWORD\n");
+  return 1;
+}
+int mqtt_port = strtol(mqtt_port_s, (char**)NULL, 10);
+```
+
+connect to mqtt server ([ref](https://mosquitto.org/api/files/mosquitto-h.html))
+
+```c
+char mqtt_client_id[32];
+sprintf(mqtt_client_id, "scd4x_%s", serial_number);
+char topic[64];
+
+struct mosquitto* mosq = NULL;
+mosquitto_lib_init();
+mosq = mosquitto_new(mqtt_client_id, true, NULL);
+if (!mosq) {
+  printf("mqtt:failed to create client!\n");
+  mosquitto_lib_cleanup();
+  return 1;
+}
+mosquitto_username_pw_set(mosq, mqtt_username, mqtt_password);
+if (mosquitto_connect(mosq, mqtt_host, mqtt_port, mqtt_keep_alive)) {
+  fprintf(stderr, "mqtt:Unable to connect.\n");
+  return 1;
+}
+
+int loop = mosquitto_loop_start(mosq);
+if (loop != MOSQ_ERR_SUCCESS) {
+  printf("mqtt:mosquitto loop error\n");
+  return 1;
+}
+```
+
+let's try to publish something
+
+```c
+sprintf(topic, "test/%s", mqtt_client_id);
+sprintf(buff, "it works!");
+printf("mqtt:topic='%s',msg='%s'\n", topic, buff);
+mosquitto_will_set(mosq, topic, strlen(buff), buff, 0, 0);
+```
+
+## integrate with home assistant
+
+we follow the pattern of mqtt discovery from home assistant so that we can view the sensor data in home assistant ([ref](https://www.home-assistant.io/integrations/mqtt/#mqtt-discovery)) and use suppported device classes in home assistant ([ref](https://www.home-assistant.io/integrations/sensor/))
+
+```c
+sprintf(topic, "homeassistant/sensor/%s_CO2/config", mqtt_client_id);
+sprintf(buff, "{\"device_class\":\"carbon_dioxide\",\"name\":\"CO2 Concentration\",\"state_class\":\"measurement\",\"unique_id\":\"%s_CO2\",\"state_topic\":\"homeassistant/sensor/%s/state\",\"unit_of_measurement\":\"ppm\",\"value_template\":\"{{ value_json.co2_concentration }}\"}", mqtt_client_id, mqtt_client_id);
+printf("mqtt:topic='%s',msg='%s'\n", topic, buff);
+mosquitto_publish(mosq, NULL, topic, strlen(buff), buff, 0, 0);
+
+sprintf(topic, "homeassistant/sensor/%s_T/config", mqtt_client_id);
+sprintf(buff, "{\"device_class\":\"temperature\",\"name\":\"Temperature\",\"state_class\":\"measurement\",\"unique_id\":\"%s_T\",\"state_topic\":\"homeassistant/sensor/%s/state\",\"unit_of_measurement\":\"°C\",\"value_template\":\"{{ value_json.temperature }}\"}", mqtt_client_id, mqtt_client_id);
+printf("mqtt:topic='%s',msg='%s'\n", topic, buff);
+mosquitto_publish(mosq, NULL, topic, strlen(buff), buff, 0, 0);
+
+sprintf(topic, "homeassistant/sensor/%s_RH/config", mqtt_client_id);
+sprintf(buff, "{\"device_class\":\"humidity\",\"name\":\"Relative Humidity\",\"state_class\":\"measurement\",\"unique_id\":\"%s_RH\",\"state_topic\":\"homeassistant/sensor/%s/state\",\"unit_of_measurement\":\"%%\",\"value_template\":\"{{ value_json.relative_humidity }}\"}", mqtt_client_id, mqtt_client_id);
+printf("mqtt:topic='%s',msg='%s'\n", topic, buff);
+mosquitto_publish(mosq, NULL, topic, strlen(buff), buff, 0, 0);
+```
+
+After successfull registration in home assistant, we can publish sensor data to specified `state_topic`
+
+```c
+sprintf(buff,
+        "\"co2_concentration\":%d,\"temperature\":%f,"
+        "\"relative_humidity\":%f}",
+        co2_concentration, temperature, relative_humidity);
+printf("mqtt:topic='%s',msg='%s'\n", topic, buff);
+mosquitto_publish(mosq, NULL, topic, strlen(buff), buff, 0, 0);
+```
+
+## long(er) term storage and better dashboard
+By default, home assistant has 10 day retention for history data. I would prefer let my Prometheus instance which has 12 weeks retention configured. Prometheus is not designed for long term storage either, but currently fullfil my requrement.
+
+Adding prometheus support on home assistant is simple, just add a line of `prometheus:` to home assistant configuration file ([ref](https://www.home-assistant.io/integrations/prometheus/)), and configure target and authentication on prometheus side.
+

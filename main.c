@@ -13,21 +13,26 @@
 #define mqtt_max_message_size 512
 
 char buff[mqtt_max_message_size];
-bool session = true;
 
 int device;
 
 int main(void) {
+  time_t start_time;
+  time(&start_time);
 
   char* mqtt_host = getenv("MQTT_HOST");
   char* mqtt_port_s = getenv("MQTT_PORT");
   char* mqtt_username = getenv("MQTT_USERNAME");
   char* mqtt_password = getenv("MQTT_PASSWORD");
-  if (mqtt_host == NULL || mqtt_port_s == NULL || mqtt_username == NULL || mqtt_password == NULL) {
-    printf("one of the environment varabiles not set: MQTT_HOST, MQTT_PORT, MQTT_USERNAME, MQTT_PASSWORD\n");
+  if (mqtt_host == NULL || mqtt_port_s == NULL || mqtt_username == NULL ||
+      mqtt_password == NULL) {
+    printf(
+        "one of the environment varabiles not set: MQTT_HOST, MQTT_PORT, "
+        "MQTT_USERNAME, MQTT_PASSWORD\n");
     return 1;
   }
-  int mqtt_port = strtol(mqtt_port_s, (char **)NULL, 10);
+  int mqtt_port = strtol(mqtt_port_s, (char**)NULL, 10);
+
   device = open("/dev/i2c-0", O_RDWR);
   if (device < 0) {
     printf("file open error: %x\n", device);
@@ -50,7 +55,8 @@ int main(void) {
   __u16 serial_number_2;
   char serial_number[12];
   get_serial_number(&serial_number_0, &serial_number_1, &serial_number_2);
-  sprintf(serial_number, "%x-%x-%x", serial_number_0, serial_number_1, serial_number_2);
+  sprintf(serial_number, "%x-%x-%x", serial_number_0, serial_number_1,
+          serial_number_2);
   printf("serial_number: %s\n", serial_number);
   sleep(1);
 
@@ -76,44 +82,83 @@ int main(void) {
   start_periodic_measurement();
   sleep(6);
 
-  char client_id[32];
-  sprintf(client_id, "scd4x_%s", serial_number);
+  char mqtt_client_id[32];
+  sprintf(mqtt_client_id, "scd4x_%s", serial_number);
+  char topic[64];
 
   struct mosquitto* mosq = NULL;
   mosquitto_lib_init();
-  mosq = mosquitto_new(client_id, session, NULL);
+  mosq = mosquitto_new(mqtt_client_id, true, NULL);
   if (!mosq) {
-    printf("failed to create client!\n");
+    printf("mqtt:failed to create client!\n");
     mosquitto_lib_cleanup();
     return 1;
   }
   mosquitto_username_pw_set(mosq, mqtt_username, mqtt_password);
   if (mosquitto_connect(mosq, mqtt_host, mqtt_port, mqtt_keep_alive)) {
-    fprintf(stderr, "Unable to connect.\n");
+    fprintf(stderr, "mqtt:Unable to connect.\n");
     return 1;
   }
 
   int loop = mosquitto_loop_start(mosq);
   if (loop != MOSQ_ERR_SUCCESS) {
-    printf("mosquitto loop error\n");
+    printf("mqtt:mosquitto loop error\n");
     return 1;
   }
 
-  sprintf(buff, "%s is up\n", client_id);
-  printf("%s", buff);
-  mosquitto_publish(mosq, NULL, "up:scd4x", strlen(buff) + 1, buff, 0, 0);
+  sprintf(topic, "homeassistant/sensor/%s/LWT", mqtt_client_id);
+  sprintf(buff, "Offline");
+  printf("mqtt:will_topic='%s',msg='%s'\n", topic, buff);
+  mosquitto_will_set(mosq, topic, strlen(buff), buff, 0, 0);
+  sleep(1);
+
+  sprintf(topic, "homeassistant/sensor/%s/LWT", mqtt_client_id);
+  sprintf(buff, "Online");
+  printf("mqtt:topic='%s',msg='%s'\n", topic, buff);
+  mosquitto_will_set(mosq, topic, strlen(buff), buff, 0, 0);
+  sleep(1);
+
+  sprintf(topic, "homeassistant/sensor/%s_CO2/config", mqtt_client_id);
+  sprintf(buff, "{\"device_class\":\"carbon_dioxide\",\"name\":\"CO2 Concentration\",\"state_class\":\"measurement\",\"unique_id\":\"%s_CO2\",\"state_topic\":\"homeassistant/sensor/%s/state\",\"unit_of_measurement\":\"ppm\",\"value_template\":\"{{ value_json.co2_concentration }}\"}", mqtt_client_id, mqtt_client_id);
+  printf("mqtt:topic='%s',msg='%s'\n", topic, buff);
+  mosquitto_publish(mosq, NULL, topic, strlen(buff), buff, 0, 0);
+  sleep(1);
+
+  sprintf(topic, "homeassistant/sensor/%s_T/config", mqtt_client_id);
+  sprintf(buff, "{\"device_class\":\"temperature\",\"name\":\"Temperature\",\"state_class\":\"measurement\",\"unique_id\":\"%s_T\",\"state_topic\":\"homeassistant/sensor/%s/state\",\"unit_of_measurement\":\"°C\",\"value_template\":\"{{ value_json.temperature }}\"}", mqtt_client_id, mqtt_client_id);
+  printf("mqtt:topic='%s',msg='%s'\n", topic, buff);
+  mosquitto_publish(mosq, NULL, topic, strlen(buff), buff, 0, 0);
+  sleep(1);
+
+  sprintf(topic, "homeassistant/sensor/%s_RH/config", mqtt_client_id);
+  sprintf(buff, "{\"device_class\":\"humidity\",\"name\":\"Relative Humidity\",\"state_class\":\"measurement\",\"unique_id\":\"%s_RH\",\"state_topic\":\"homeassistant/sensor/%s/state\",\"unit_of_measurement\":\"%%\",\"value_template\":\"{{ value_json.relative_humidity }}\"}", mqtt_client_id, mqtt_client_id);
+  printf("mqtt:topic='%s',msg='%s'\n", topic, buff);
+  mosquitto_publish(mosq, NULL, topic, strlen(buff), buff, 0, 0);
+  sleep(1);
+
+  sprintf(topic, "homeassistant/sensor/%s_ts/config", mqtt_client_id);
+  sprintf(buff, "{\"device_class\":\"timestamp\",\"name\":\"Timestamp\",\"unique_id\":\"%s_ts\",\"state_topic\":\"homeassistant/sensor/%s/state\",\"unit_of_measurement\":\"\",\"value_template\":\"{{ value_json.timestamp }}\"}", mqtt_client_id, mqtt_client_id);
+  printf("mqtt:topic='%s',msg='%s'\n", topic, buff);
+  mosquitto_publish(mosq, NULL, topic, strlen(buff), buff, 0, 0);
+  sleep(1);
+
 
   __u16 co2_concentration;
   float temperature;
   float relative_humidity;
-  time_t ltime;
+  time_t now;
   while (1) {
     read_measurement(&co2_concentration, &temperature, &relative_humidity);
-    ltime = time(NULL);
-    sprintf(buff, "%s:CO_2=%dppm,T=%fC,RH=%f%%\n", strtok(asctime(localtime(&ltime)), "\n"),
-            co2_concentration, temperature, relative_humidity);
-    printf("%s", buff);
-    mosquitto_publish(mosq, NULL, "update:scd4x", strlen(buff) + 1, buff, 0, 0);
+    time(&now);
+    char timestr[21];
+    sprintf(topic, "homeassistant/sensor/%s/state", mqtt_client_id);
+    strftime(timestr, sizeof timestr, "%Y-%m-%dT%H:%M:%SZ", gmtime(&now));
+    sprintf(buff,
+            "{\"timestamp\":\"%s\",\"co2_concentration\":%d,\"temperature\":%f,"
+            "\"relative_humidity\":%f}",
+            timestr, co2_concentration, temperature, relative_humidity);
+    printf("mqtt:topic='%s',msg='%s'\n", topic, buff);
+    mosquitto_publish(mosq, NULL, topic, strlen(buff), buff, 0, 0);
     sleep(5);
   }
 }
