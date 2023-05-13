@@ -105,7 +105,7 @@ iptables -P INPUT ACCEPT
 iptables -P FORWARD ACCEPT
 iptables -t nat -A POSTROUTING -o wlp4s0 -j MASQUERADE
 ```
-Save the rules to make the change persistant
+Save the rules to make the change persistant (This may only work on Archlinux ([ref](https://wiki.archlinux.org/title/Iptables)))
 
 ```bash
 iptables-save -f /etc/iptables/iptables.rules
