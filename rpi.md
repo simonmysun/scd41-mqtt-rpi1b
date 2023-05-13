@@ -105,6 +105,11 @@ iptables -P INPUT ACCEPT
 iptables -P FORWARD ACCEPT
 iptables -t nat -A POSTROUTING -o wlp4s0 -j MASQUERADE
 ```
+Save the rules to make the change persistant
+
+```bash
+iptables-save -f /etc/iptables/iptables.rules
+```
 
 `wlp4s0` is my wireless adapter with internet connection
 
