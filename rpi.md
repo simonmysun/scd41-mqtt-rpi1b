@@ -365,6 +365,7 @@ mosquitto_publish(mosq, NULL, topic, strlen(buff), buff, 0, 0);
 After successfull registration in home assistant, we can publish sensor data to specified `state_topic`
 
 ```c
+sprintf(topic, "homeassistant/sensor/%s/state", mqtt_client_id);
 sprintf(buff,
         "\"co2_concentration\":%d,\"temperature\":%f,"
         "\"relative_humidity\":%f}",
