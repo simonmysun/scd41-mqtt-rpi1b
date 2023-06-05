@@ -71,8 +71,9 @@ int scd4x_read(__u16 command, __u8* data, int length) {
   return 0;
 }
 
-int scd4x_send_and_fetch(__u16 command, __u16 datum,
-                         __u8* data, int length) {
+int scd4x_send_and_fetch(__u16 command, __u16 datum, __u8* data, int length) {
+  // This part is not working. combined transactions of mixing read and write
+  // messages are not supported
   if (scd4x_send_command(command) != 0) {
     return 1;
   }

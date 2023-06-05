@@ -1,52 +1,28 @@
+# CO_2 senor on Raspberry Pi with MQTT and Home Assistant integration
 
-## configure wifi adapter for raspberry pi (this chapter is full of failures and can be skipped. )
-this chapter is full of failures and can be skipped. I leave it here just in case some one wants to give a try and can use some of the information.
-### drivers from source
-https://github.com/fastoe drivers doesn't work
+I read from [here](https://news.ycombinator.com/item?id=34648021) that a slightly high CO_2 concentration may decrease some people's cognitive function, like, 1200ppm results in 15% of decrease or so. Since I am staying in my bedroom in most of time and I don't have a good habbit of regular ventilation, I believe a CO_2 sensor and an alert system may help me get out of any gloomy states. I have a Raspberry Pi 1b at hand, so I can use it to read measurement from a CO_2 sensor. It turns out it takes much much more efforts to get the 11-years-old Raspberry Pi to connect to the internet. I put this part at the end of this post.
 
-### precompiled drivers
-using http://downloads.fars-robotics.net/wifi-drivers/8822bu-drivers/
+## Requirement and Design
 
-downgrade kernel to 5.10.73+ with `rpi-update 9fe1e973b550019bd6a87966db8443a70b991129` ([ref](https://github.com/Hexxeh/rpi-firmware/blob/9fe1e973b550019bd6a87966db8443a70b991129/uname_string), [ref](https://raspberrypi.stackexchange.com/questions/19959/how-to-get-a-specific-kernel-version-for-raspberry-pi-linux))
+I want to measure the CO_2 concentration of my environment and read the measurement and get notificaiton from my PC and mobile phones. Therefore my plan is to buy a CO_2 sensor, connect it to my Raspberry Pi, write a program to read from CO_2 sensor and send the data to my server, and display the measurement on my server via web. 
 
-lock kernel version by `apt-mark hold libraspberrypi-bin libraspberrypi-dev libraspberrypi-doc libraspberrypi0 raspberrypi-bootloader raspberrypi-kernel raspberrypi-kernel-headers` ([ref](https://forums.raspberrypi.com//viewtopic.php?p=1701547#p1701547))
+Since my Raspberry Pi is quite old I am going to write in C and use MQTT to communicate with my server. On the server side, I have a Home Assistant instance running, so it would be great if I can integrate them. Once Home Assistant can receive these data, I will be able to view them on my PC and mobile phone and also let prometheus to scrape it for alerting. So these will be the stack I choose:
 
-```bash
-wget http://downloads.fars-robotics.net/wifi-drivers/install-wifi -O /usr/bin/install-wifi
-chmod +x /usr/bin/install-wifi
-install-wifi
-```
-
-Failed. system hang after wlan0 read
-
-### older kernel with precompiled drivers
-image from https://downloads.raspberrypi.org/raspbian_lite/images/raspbian_lite-2020-02-14/
-
-using `dd` to flash image
-
-using `parted` to resize partition to avoid wasting space
-
-using `e2fsck -f` and `resize2fs` to make size valid
-
-boot into rpi
-
-repeat last chapter
-
-result: wlan0 appears but cannot be brought up.
+- C with libmosquitto on Raspberry Pi
+- Mosquitto MQTT Server
+- Home Assistant
+- Prometheus, Grafana and alert manager
 
 ## connect to pc via ethernet and share pc internet
+The first thing to do is to get my Raspberry Pi connected to the internet, after days of trying I finally gave up on wifi adapter drivers. So now I connect a CAT6 ethernet cable to a PC with internet access via WiFi.
 
-finally gave up on wifi adapter drivers.
-
-connect cat6 ethernet to a pc with internet access via wifi.
-
-install dhcpd.
+Install dhcpd:
 
 ``` bash
 pacman -S dhcp
 ```
 
-add static ip for ethernet adapter
+Add static IP for ethernet adapter:
 
 ``` bash
 ip addr add 192.168.155.1/24 dev enp8s0
@@ -54,13 +30,13 @@ ip addr add 192.168.155.1/24 dev enp8s0
 
 `enp8s0` is my ethernet interface connecting raspberry pi.
 
-backup dhcpd config
+Backup dhcpd config:
 
 ``` bash
 cp /etc/dhcpd.conf /etc/dhcpd.conf.example
 ```
 
-add dhcp service configuration
+Add dhcp service configuration:
 
 ``` conf
 /etc/dhcpd.conf
@@ -80,24 +56,24 @@ subnet 192.168.2.0 netmask 255.255.255.0 {
 }
 ```
 
-start dhcp service
+Start dhcpd service:
 
 ``` bash
 systemctl enable dhcpd4
 systemctl start dhcpd4
 ```
 
-the two deviced shoud be able to ping each other now.
+The two deviced shoud be able to ping each other now.
 
-share internet
+Thare Internet:
 
 ``` bash
 echo "1" > /proc/sys/net/ipv4/ip_forward
 ```
 
-add `net.ipv4.ip_forward=1` to `/etc/sysctl.conf` to make this change permanent
+Add `net.ipv4.ip_forward=1` to `/etc/sysctl.conf` to make this change permanent
 
-enable NAT with `iptables`
+Enable NAT with `iptables`:
 
 ``` bash
 iptables -F
@@ -105,6 +81,7 @@ iptables -P INPUT ACCEPT
 iptables -P FORWARD ACCEPT
 iptables -t nat -A POSTROUTING -o wlp4s0 -j MASQUERADE
 ```
+
 Save the rules to make the change persistant (This may only work on Archlinux ([ref](https://wiki.archlinux.org/title/Iptables)))
 
 ```bash
@@ -113,27 +90,33 @@ iptables-save -f /etc/iptables/iptables.rules
 
 `wlp4s0` is my wireless adapter with internet connection
 
-the Pi shoud be able to access internet now.
+The Pi shoud be able to access internet now.
 
 ([ref](http://linux-wiki.cn/wiki/zh-hans/%E5%85%B1%E4%BA%AB%E4%B8%8A%E7%BD%91))
 
+## CO_2 sensors
+There are many types of CO_2 sensors on the market, Some of them are inaccurate, some of them are expensive, and some of them are even fake. I noticed that the price of a decent consumer sensor chip is at least 25 EUR, therefore I guess the multifunctional air quality sensor below this price can't fullfill my requirement. CO_2 equivalent (CO_2eq) or Estimated CO_2 (eCO_2) sensors are also not considered because they are not reliable and inaccurate. 
+
+I asked friends about different types of CO_2 sensors and finally decide to buy an SCD41 sensor from AliExpress. This sensor uses photoacoustic spectroscopy to measure CO_2 concentration and also measures temperature and relative humidity. 
+
 ## read data from sensor
 
-enable i2c in `sudo raspi-config`, connect to corresponding pins (I'm using Pin 3, 4, 5, 6) ([ref](https://pinout.xyz/pinout/i2c)), restart pi
+SCD4x uses I2C and it's address is `0x62`. 
+
+First enable I2C on Raspberry Pi in `sudo raspi-config`, connect the sensor to corresponding pins (I'm using Pin 3, 4, 5, 6) ([ref](https://pinout.xyz/pinout/i2c)), restart Pi. Then we can see the SCD41 sensor at address `0x62`:
 
 ``` bash
-
 ls /dev/i2c*
 apt install i2c-tools
 i2cdetect 0
 i2cdump 0 0x62
 ```
 
-however scd4x doesn't work that way ([ref](https://cdn.sparkfun.com/assets/d/4/9/a/d/Sensirion_CO2_Sensors_SCD4x_Datasheet.pdf))
+However SCD4x doesn't work that way ([ref](https://cdn.sparkfun.com/assets/d/4/9/a/d/Sensirion_CO2_Sensors_SCD4x_Datasheet.pdf))
 
-we can read write directly ([ref](https://www.kernel.org/doc/Documentation/i2c/dev-interface))
+We can read write directly ([ref](https://www.kernel.org/doc/Documentation/i2c/dev-interface))
 
-Include `linux/i2c-dev.h` to get definition of `I2C_SLAVE`, include`fcntl.h` to open file, include `unistd.h` to `read`, `write` and `sleep`, and include `stdio.h` to print message to stdout.
+Include `linux/i2c-dev.h` to get definition of `I2C_SLAVE`, include`fcntl.h` to open file, include `unistd.h` to `read`, `write` and `sleep`, and include `stdio.h` to print message to stdout:
 
 ```c
 #include <linux/i2c-dev.h>
@@ -142,7 +125,7 @@ Include `linux/i2c-dev.h` to get definition of `I2C_SLAVE`, include`fcntl.h` to 
 #include <stdio.h>
 ```
 
-open i2c device (mine is `/dev/i2c-0`, it can be elsewhere):
+Open I2C device (mine is `/dev/i2c-0`, it can be elsewhere):
 
 ```c
 int device = open("/dev/i2c-0", O_RDWR);
@@ -152,7 +135,7 @@ if (device < 0) {
 }
 ```
 
-specify scd4x sensor address:
+Specify SCD4x sensor address:
 
 ```c
 __u8 addr = 0x62;
@@ -163,7 +146,7 @@ if (ioctl(device, I2C_SLAVE, addr) < 0) {
 }
 ```
 
-to send command `start_periodic_measurement`:
+To send command `start_periodic_measurement`:
 
 ```c
 __u8 command[2] = { 0x21, 0xb1, };
@@ -172,7 +155,7 @@ if (write(device, command, 2) != 2) {
 }
 ```
 
-the result of `read_measurement` has a CRC checksum, let's copy and adapt the CRC function in the scd4x datasheet.
+The result of `read_measurement` has a CRC checksum, let's copy and adapt the CRC function in the SCD4x datasheet.
 
 ```c
 __u8 crc(__u8* data, __u16 count) {
@@ -193,7 +176,7 @@ __u8 crc(__u8* data, __u16 count) {
 }
 ```
 
-to read measurement:
+To read measurement:
 
 ```c
 __u8 command[2] = { 0xec, 0x05, };
@@ -223,7 +206,7 @@ rh = (rh * 100) / 0x10000;;
 printf("CO_2: %dppm; T: %fC; RH: %f%%\n", co2, t, rh);
 ```
 
-but this is ugly. let's add an abstract layer and define:
+But this is ugly. let's add an abstract layer and define:
 
 ```c
 int scd4x_send_command(int device, __u8 addr, __u16 command);
@@ -233,7 +216,7 @@ int scd4x_send_and_fetch(int device, __u8 addr, __u16 command, __u16 datum,
                           __u8* data, int length);
 ```
 
-then we can implement all the funtions of scd41 happily:
+Then we can implement all the funtions of SCD41 happily:
 
 ```c
 int start_periodic_measurement();
@@ -259,9 +242,9 @@ int measure_single_shot();
 int measure_single_shot_rht_only();
 ```
 
-Note: It seems that writing data to the sensor does not work now. But I currently don't have much need to do so. Will fix it in the future.
+Note: Combined transactions of mixing read and write messages are not supported. But I currently don't have much need to do so. Will fix it in the future.
 
-now we can read our sensor data:
+Now we can read our sensor data:
 
 ```c
 char buff[512]
@@ -275,19 +258,19 @@ printf("%s", buff);
 
 
 ## publish to mqtt server
-here we use mosquitto to publish to my mqtt server. The server side is also mosquitto so I use it again in client side.
+Here we use mosquitto to publish to my mqtt server. The server side is also mosquitto so I use it again in client side.
 
 ```bash
 apt install libmosquitto-dev
 ```
 
-include the header
+Include the header
 
 ```c
 #include <mosquitto.h>
 ```
 
-get the server information from environment variables
+Get the server information from environment variables
 
 ```c
 char* mqtt_host = getenv("MQTT_HOST");
@@ -304,7 +287,7 @@ if (mqtt_host == NULL || mqtt_port_s == NULL || mqtt_username == NULL ||
 int mqtt_port = strtol(mqtt_port_s, (char**)NULL, 10);
 ```
 
-connect to mqtt server ([ref](https://mosquitto.org/api/files/mosquitto-h.html))
+Connect to mqtt server ([ref](https://mosquitto.org/api/files/mosquitto-h.html))
 
 ```c
 char mqtt_client_id[32];
@@ -332,7 +315,7 @@ if (loop != MOSQ_ERR_SUCCESS) {
 }
 ```
 
-let's try to publish something
+Let's try to publish something
 
 ```c
 sprintf(topic, "test/%s", mqtt_client_id);
@@ -341,9 +324,11 @@ printf("mqtt:topic='%s',msg='%s'\n", topic, buff);
 mosquitto_will_set(mosq, topic, strlen(buff), buff, 0, 0);
 ```
 
+I can receive the message on my mosquitto MQTT server.
+
 ## integrate with home assistant
 
-we follow the pattern of mqtt discovery from home assistant so that we can view the sensor data in home assistant ([ref](https://www.home-assistant.io/integrations/mqtt/#mqtt-discovery)) and use suppported device classes in home assistant ([ref](https://www.home-assistant.io/integrations/sensor/))
+We follow the pattern of mqtt discovery from home assistant so that we can view the sensor data in home assistant ([ref](https://www.home-assistant.io/integrations/mqtt/#mqtt-discovery)) and use suppported device classes in home assistant ([ref](https://www.home-assistant.io/integrations/sensor/)):
 
 ```c
 sprintf(topic, "homeassistant/sensor/%s_CO2/config", mqtt_client_id);
@@ -362,7 +347,7 @@ printf("mqtt:topic='%s',msg='%s'\n", topic, buff);
 mosquitto_publish(mosq, NULL, topic, strlen(buff), buff, 0, 0);
 ```
 
-After successfull registration in home assistant, we can publish sensor data to specified `state_topic`
+After successfull registration in home assistant, we can publish sensor data to specified `state_topic`:
 
 ```c
 sprintf(topic, "homeassistant/sensor/%s/state", mqtt_client_id);
@@ -374,8 +359,38 @@ printf("mqtt:topic='%s',msg='%s'\n", topic, buff);
 mosquitto_publish(mosq, NULL, topic, strlen(buff), buff, 0, 0);
 ```
 
-## long(er) term storage and better dashboard
-By default, home assistant has 10 day retention for history data. I would prefer let my Prometheus instance which has 12 weeks retention configured. Prometheus is not designed for long term storage either, but currently fullfil my requrement.
+## Long(er) term storage, better dashboard and alerts
+By default, home assistant has 10 day retention for history data. My Prometheus instance which has 12 weeks retention configured. Prometheus is not designed for long term storage either, but currently fullfil my requrement.
 
 Adding prometheus support on home assistant is simple, just add a line of `prometheus:` to home assistant configuration file ([ref](https://www.home-assistant.io/integrations/prometheus/)), and configure target and authentication on prometheus side.
 
+## Appendix: How not to configure WiFi adapter for Raspberry Pi (this chapter is full of failures and can be skipped. )
+this chapter is full of failures and can be skipped. I leave it here just in case some one wants to give a try and can use some of the information. 
+
+To connect to internet from my room, I hoped to use a wireless adapter. I bought several different adapters but at last none of them worked. After several days trying, I finally gave up on this.
+### drivers from source
+https://github.com/fastoe drivers doesn't work on RPi1b
+
+### precompiled drivers
+- using http://downloads.fars-robotics.net/wifi-drivers/8822bu-drivers/
+
+- downgrade kernel to 5.10.73+ with `rpi-update 9fe1e973b550019bd6a87966db8443a70b991129` ([ref](https://github.com/Hexxeh/rpi-firmware/blob/9fe1e973b550019bd6a87966db8443a70b991129/uname_string), [ref](https://raspberrypi.stackexchange.com/questions/19959/how-to-get-a-specific-kernel-version-for-raspberry-pi-linux))
+
+- lock kernel version by `apt-mark hold libraspberrypi-bin libraspberrypi-dev libraspberrypi-doc libraspberrypi0 raspberrypi-bootloader raspberrypi-kernel raspberrypi-kernel-headers` ([ref](https://forums.raspberrypi.com//viewtopic.php?p=1701547#p1701547))
+
+```bash
+wget http://downloads.fars-robotics.net/wifi-drivers/install-wifi -O /usr/bin/install-wifi
+chmod +x /usr/bin/install-wifi
+install-wifi
+```
+
+Failed. system hang after wlan0 read
+
+### older kernel with precompiled drivers
+- image from https://downloads.raspberrypi.org/raspbian_lite/images/raspbian_lite-2020-02-14/
+- using `dd` to flash image
+- using `parted` to resize partition to avoid wasting space
+- using `e2fsck -f` and `resize2fs` to make size valid
+- boot into rpi
+- repeat last chapter
+result: wlan0 appears but cannot be brought up.
