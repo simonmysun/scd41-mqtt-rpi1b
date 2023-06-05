@@ -1,20 +1,22 @@
 # CO_2 senor on Raspberry Pi with MQTT and Home Assistant integration
 
-I read from [here](https://news.ycombinator.com/item?id=34648021) that a slightly high CO_2 concentration may decrease some people's cognitive function, like, 1200ppm results in 15% of decrease or so. Since I am staying in my bedroom in most of time and I don't have a good habbit of regular ventilation, I believe a CO_2 sensor and an alert system may help me get out of any gloomy states. I have a Raspberry Pi 1b at hand, so I can use it to read measurement from a CO_2 sensor. It turns out it takes much much more efforts to get the 11-years-old Raspberry Pi to connect to the internet. I put this part at the end of this post.
+I read from [ref](https://news.ycombinator.com/item?id=34648021) that a slightly high CO_2 (carbon dioxide) concentration may decrease some people's cognitive function, like, 1200ppm (parts per million) results in 15% of decrease or so. Since I am staying in my bedroom in the most of time and I don't have a good habbit of regular ventilation, I believe a CO_2 sensor and an alert system may help me get out of any gloomy states. I have a Raspberry Pi 1b at hand, so I can use it to read measurement from a CO_2 sensor. It turns out it takes much much more efforts to get the 11-years-old Raspberry Pi to connect to the WiFi. I put this failure part at the end of this post.
+
+![pending picture final results]()
 
 ## Requirement and Design
 
 I want to measure the CO_2 concentration of my environment and read the measurement and get notificaiton from my PC and mobile phones. Therefore my plan is to buy a CO_2 sensor, connect it to my Raspberry Pi, write a program to read from CO_2 sensor and send the data to my server, and display the measurement on my server via web. 
 
-Since my Raspberry Pi is quite old I am going to write in C and use MQTT to communicate with my server. On the server side, I have a Home Assistant instance running, so it would be great if I can integrate them. Once Home Assistant can receive these data, I will be able to view them on my PC and mobile phone and also let prometheus to scrape it for alerting. So these will be the stack I choose:
+Since my Raspberry Pi is quite old I am going to write in C and use MQTT (Message Queuing Telemetry Transport) to communicate with my server. On the server side, I have a Home Assistant instance running, so it would be great if I can integrate them. Once Home Assistant can receive these data, I will be able to view them on my PC and mobile phone and also let prometheus to scrape it for alerting. So these will be the stack I choose:
 
 - C with libmosquitto on Raspberry Pi
 - Mosquitto MQTT Server
 - Home Assistant
 - Prometheus, Grafana and alert manager
 
-## connect to pc via ethernet and share pc internet
-The first thing to do is to get my Raspberry Pi connected to the internet, after days of trying I finally gave up on wifi adapter drivers. So now I connect a CAT6 ethernet cable to a PC with internet access via WiFi.
+## Connecting to PC via ethernet and sharing Internet from PC
+The first thing to do is to get my Raspberry Pi connected to the Internet, after days of trying I finally gave up on WiFi adapter drivers. So now I connect a CAT6 ethernet cable to a PC with internet access via WiFi ([ref](http://linux-wiki.cn/wiki/zh-hans/%E5%85%B1%E4%BA%AB%E4%B8%8A%E7%BD%91)).
 
 Install dhcpd:
 
@@ -63,9 +65,9 @@ systemctl enable dhcpd4
 systemctl start dhcpd4
 ```
 
-The two deviced shoud be able to ping each other now.
+The two devices shoud be able to ping each other now.
 
-Thare Internet:
+Share the Internet:
 
 ``` bash
 echo "1" > /proc/sys/net/ipv4/ip_forward
@@ -88,22 +90,28 @@ Save the rules to make the change persistant (This may only work on Archlinux ([
 iptables-save -f /etc/iptables/iptables.rules
 ```
 
+Otherwise simply `iptables-restore /path/to/iptables.rules`.
+
 `wlp4s0` is my wireless adapter with internet connection
 
 The Pi shoud be able to access internet now.
-
-([ref](http://linux-wiki.cn/wiki/zh-hans/%E5%85%B1%E4%BA%AB%E4%B8%8A%E7%BD%91))
 
 ## CO_2 sensors
 There are many types of CO_2 sensors on the market, Some of them are inaccurate, some of them are expensive, and some of them are even fake. I noticed that the price of a decent consumer sensor chip is at least 25 EUR, therefore I guess the multifunctional air quality sensor below this price can't fullfill my requirement. CO_2 equivalent (CO_2eq) or Estimated CO_2 (eCO_2) sensors are also not considered because they are not reliable and inaccurate. 
 
 I asked friends about different types of CO_2 sensors and finally decide to buy an SCD41 sensor from AliExpress. This sensor uses photoacoustic spectroscopy to measure CO_2 concentration and also measures temperature and relative humidity. 
 
-## read data from sensor
+![pending picture scd41]()
 
-SCD4x uses I2C and it's address is `0x62`. 
+## Reading data from sensor
 
-First enable I2C on Raspberry Pi in `sudo raspi-config`, connect the sensor to corresponding pins (I'm using Pin 3, 4, 5, 6) ([ref](https://pinout.xyz/pinout/i2c)), restart Pi. Then we can see the SCD41 sensor at address `0x62`:
+SCD4x uses I2C (Inter-Integrated Circuit) bus and it's address is `0x62`. 
+
+First enable I2C on Raspberry Pi in `sudo raspi-config`, connect the sensor to corresponding pins (I'm using Pin 3, 4, 5, 6) ([ref](https://pinout.xyz/pinout/i2c)), restart Pi. 
+
+![pending picture scd41 with pi]()
+
+Then we can see the SCD41 sensor at address `0x62`:
 
 ``` bash
 ls /dev/i2c*
@@ -155,7 +163,7 @@ if (write(device, command, 2) != 2) {
 }
 ```
 
-The result of `read_measurement` has a CRC checksum, let's copy and adapt the CRC function in the SCD4x datasheet.
+The result of `read_measurement` has a CRC (Cyclic Redundancy Check) checksum, let's copy and adapt the CRC function in the SCD4x datasheet.
 
 ```c
 __u8 crc(__u8* data, __u16 count) {
@@ -242,7 +250,7 @@ int measure_single_shot();
 int measure_single_shot_rht_only();
 ```
 
-Note: Combined transactions of mixing read and write messages are not supported. But I currently don't have much need to do so. Will fix it in the future.
+Note: Combined transactions of mixing read and write messages are not supported(search for 'combined transactions' in [ref](https://www.kernel.org/doc/Documentation/i2c/dev-interface)). But I currently don't have much need to do so. Will fix it in the future.
 
 Now we can read our sensor data:
 
@@ -257,8 +265,8 @@ printf("%s", buff);
 ```
 
 
-## publish to mqtt server
-Here we use mosquitto to publish to my mqtt server. The server side is also mosquitto so I use it again in client side.
+## Publishing to mqtt server
+Here we use Eclipse Mosquitto&trade; ([ref](https://mosquitto.org/)) to publish to my mqtt server. The server side is also Mosquitto so I use it again in client side.
 
 ```bash
 apt install libmosquitto-dev
@@ -282,7 +290,7 @@ if (mqtt_host == NULL || mqtt_port_s == NULL || mqtt_username == NULL ||
   printf(
       "one of the environment varabiles not set: MQTT_HOST, MQTT_PORT, "
       "MQTT_USERNAME, MQTT_PASSWORD\n");
-  return 1;
+  exit(1);
 }
 int mqtt_port = strtol(mqtt_port_s, (char**)NULL, 10);
 ```
@@ -297,22 +305,9 @@ char topic[64];
 struct mosquitto* mosq = NULL;
 mosquitto_lib_init();
 mosq = mosquitto_new(mqtt_client_id, true, NULL);
-if (!mosq) {
-  printf("mqtt:failed to create client!\n");
-  mosquitto_lib_cleanup();
-  return 1;
-}
 mosquitto_username_pw_set(mosq, mqtt_username, mqtt_password);
-if (mosquitto_connect(mosq, mqtt_host, mqtt_port, mqtt_keep_alive)) {
-  fprintf(stderr, "mqtt:Unable to connect.\n");
-  return 1;
-}
-
-int loop = mosquitto_loop_start(mosq);
-if (loop != MOSQ_ERR_SUCCESS) {
-  printf("mqtt:mosquitto loop error\n");
-  return 1;
-}
+mosquitto_connect(mosq, mqtt_host, mqtt_port, mqtt_keep_alive);
+mosquitto_loop_start(mosq);
 ```
 
 Let's try to publish something
@@ -324,30 +319,48 @@ printf("mqtt:topic='%s',msg='%s'\n", topic, buff);
 mosquitto_will_set(mosq, topic, strlen(buff), buff, 0, 0);
 ```
 
-I can receive the message on my mosquitto MQTT server.
+I can now receive the message on my mosquitto MQTT server.
 
-## integrate with home assistant
+## Integration with Home Assistant
 
-We follow the pattern of mqtt discovery from home assistant so that we can view the sensor data in home assistant ([ref](https://www.home-assistant.io/integrations/mqtt/#mqtt-discovery)) and use suppported device classes in home assistant ([ref](https://www.home-assistant.io/integrations/sensor/)):
+We follow the pattern of mqtt discovery from Home assistant so that we can view the sensor data in home assistant ([ref](https://www.home-assistant.io/integrations/mqtt/#mqtt-discovery)) and use suppported device classes in home assistant ([ref](https://www.home-assistant.io/integrations/sensor/)):
 
 ```c
 sprintf(topic, "homeassistant/sensor/%s_CO2/config", mqtt_client_id);
-sprintf(buff, "{\"device_class\":\"carbon_dioxide\",\"name\":\"CO2 Concentration\",\"state_class\":\"measurement\",\"unique_id\":\"%s_CO2\",\"state_topic\":\"homeassistant/sensor/%s/state\",\"unit_of_measurement\":\"ppm\",\"value_template\":\"{{ value_json.co2_concentration }}\"}", mqtt_client_id, mqtt_client_id);
+sprintf(buff,
+        "{\"device_class\":\"carbon_dioxide\",\"name\":\"CO2 "
+        "Concentration\",\"state_class\":\"measurement\",\"unique_id\":\"%s_"
+        "CO2\",\"state_topic\":\"homeassistant/sensor/%s/"
+        "state\",\"unit_of_measurement\":\"ppm\",\"value_template\":\"{{ "
+        "value_json.co2_concentration }}\"}",
+        mqtt_client_id, mqtt_client_id);
 printf("mqtt:topic='%s',msg='%s'\n", topic, buff);
 mosquitto_publish(mosq, NULL, topic, strlen(buff), buff, 0, 0);
 
 sprintf(topic, "homeassistant/sensor/%s_T/config", mqtt_client_id);
-sprintf(buff, "{\"device_class\":\"temperature\",\"name\":\"Temperature\",\"state_class\":\"measurement\",\"unique_id\":\"%s_T\",\"state_topic\":\"homeassistant/sensor/%s/state\",\"unit_of_measurement\":\"°C\",\"value_template\":\"{{ value_json.temperature }}\"}", mqtt_client_id, mqtt_client_id);
+sprintf(buff,
+        "{\"device_class\":\"temperature\",\"name\":\"Temperature\",\"state_"
+        "class\":\"measurement\",\"unique_id\":\"%s_T\",\"state_topic\":"
+        "\"homeassistant/sensor/%s/"
+        "state\",\"unit_of_measurement\":\"°C\",\"value_template\":\"{{ "
+        "value_json.temperature }}\"}",
+        mqtt_client_id, mqtt_client_id);
 printf("mqtt:topic='%s',msg='%s'\n", topic, buff);
 mosquitto_publish(mosq, NULL, topic, strlen(buff), buff, 0, 0);
 
 sprintf(topic, "homeassistant/sensor/%s_RH/config", mqtt_client_id);
-sprintf(buff, "{\"device_class\":\"humidity\",\"name\":\"Relative Humidity\",\"state_class\":\"measurement\",\"unique_id\":\"%s_RH\",\"state_topic\":\"homeassistant/sensor/%s/state\",\"unit_of_measurement\":\"%%\",\"value_template\":\"{{ value_json.relative_humidity }}\"}", mqtt_client_id, mqtt_client_id);
+sprintf(buff,
+        "{\"device_class\":\"humidity\",\"name\":\"Relative "
+        "Humidity\",\"state_class\":\"measurement\",\"unique_id\":\"%s_RH\","
+        "\"state_topic\":\"homeassistant/sensor/%s/"
+        "state\",\"unit_of_measurement\":\"%%\",\"value_template\":\"{{ "
+        "value_json.relative_humidity }}\"}",
+        mqtt_client_id, mqtt_client_id);
 printf("mqtt:topic='%s',msg='%s'\n", topic, buff);
 mosquitto_publish(mosq, NULL, topic, strlen(buff), buff, 0, 0);
 ```
 
-After successfull registration in home assistant, we can publish sensor data to specified `state_topic`:
+After successfull registration in Home Assistant, we can publish sensor data to specified `state_topic`:
 
 ```c
 sprintf(topic, "homeassistant/sensor/%s/state", mqtt_client_id);
@@ -359,10 +372,16 @@ printf("mqtt:topic='%s',msg='%s'\n", topic, buff);
 mosquitto_publish(mosq, NULL, topic, strlen(buff), buff, 0, 0);
 ```
 
-## Long(er) term storage, better dashboard and alerts
-By default, home assistant has 10 day retention for history data. My Prometheus instance which has 12 weeks retention configured. Prometheus is not designed for long term storage either, but currently fullfil my requrement.
+![pending screenshot home assistant]()
 
-Adding prometheus support on home assistant is simple, just add a line of `prometheus:` to home assistant configuration file ([ref](https://www.home-assistant.io/integrations/prometheus/)), and configure target and authentication on prometheus side.
+## Long(er) term storage, better dashboard and alerts
+By default, Home Assistant has 10 day retention for history data. My Prometheus instance which has 12 weeks retention configured. Prometheus is not designed for long term storage either, but currently fullfil my requrement.
+
+Adding prometheus support on Home Assistant is simple, just add a line of `prometheus:` to its configuration file ([ref](https://www.home-assistant.io/integrations/prometheus/)), and configure target and authentication on Prometheus side.
+
+![pending screenshot grafana]()
+
+Once the data are in Prometheus' database, we can query them from Grafana
 
 ## Appendix: How not to configure WiFi adapter for Raspberry Pi (this chapter is full of failures and can be skipped. )
 this chapter is full of failures and can be skipped. I leave it here just in case some one wants to give a try and can use some of the information. 
