@@ -1,10 +1,5 @@
 #include "scd4x_hal.h"
 
-#define CRC8_POLYNOMIAL 0x31
-#define CRC8_INIT 0xFF
-
-#define printf(fmt, ...) (0)
-
 __u8 crc(__u8* data, __u16 count) {
   __u16 current_byte;
   __u8 crc = CRC8_INIT;
