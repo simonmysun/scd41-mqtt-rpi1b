@@ -1,5 +1,7 @@
 #include "scd4x_hal.h"
 
+#define printf(fmt, ...) (0)
+
 __u8 crc(__u8* data, __u16 count) {
   __u16 current_byte;
   __u8 crc = CRC8_INIT;

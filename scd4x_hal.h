@@ -5,8 +5,6 @@
 #define CRC8_POLYNOMIAL 0x31
 #define CRC8_INIT 0xFF
 
-#define printf(fmt, ...) (0)
-
 extern int device;
 
 int scd4x_send_command(__u16 command);
