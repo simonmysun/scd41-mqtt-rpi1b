@@ -29,7 +29,7 @@ int main(void) {
     printf(
         "one of the environment varabiles not set: MQTT_HOST, MQTT_PORT, "
         "MQTT_USERNAME, MQTT_PASSWORD\n");
-    return 1;
+    exit(1);
   }
   int mqtt_port = strtol(mqtt_port_s, (char**)NULL, 10);
 
@@ -47,14 +47,19 @@ int main(void) {
   }
 
   printf("stop_periodic_measurement and sleep 6s\n");
-  stop_periodic_measurement();
+  if (stop_periodic_measurement() != 0) {
+    exit(1);
+  }
   sleep(6);
 
   __u16 serial_number_0;
   __u16 serial_number_1;
   __u16 serial_number_2;
   char serial_number[12];
-  get_serial_number(&serial_number_0, &serial_number_1, &serial_number_2);
+  if (get_serial_number(&serial_number_0, &serial_number_1, &serial_number_2) !=
+      0) {
+    exit(1);
+  }
   sprintf(serial_number, "%x-%x-%x", serial_number_0, serial_number_1,
           serial_number_2);
   printf("serial_number: %s\n", serial_number);
@@ -64,22 +69,30 @@ int main(void) {
   // printf("setting sensor_altitude to: %d\n", sensor_altitude);
   // set_sensor_altitude(sensor_altitude);
   // sleep(1);
-  get_sensor_altitude(&sensor_altitude);
+  if (get_sensor_altitude(&sensor_altitude) != 0) {
+    exit(1);
+  }
   printf("sensor_altitude: %d\n", sensor_altitude);
   sleep(1);
 
   float temperature_offset;
-  get_temperature_offset(&temperature_offset);
+  if (get_temperature_offset(&temperature_offset) != 0) {
+    exit(1);
+  }
   printf("temperature_offset: %f\n", temperature_offset);
   sleep(1);
 
   __u16 asc_enabled;
-  get_automatic_self_calibration_enabled(&asc_enabled);
+  if (get_automatic_self_calibration_enabled(&asc_enabled) != 0) {
+    exit(1);
+  }
   printf("asc_enabled: 0x%04x\n", asc_enabled);
   sleep(1);
 
   printf("start_periodic_measurement and sleep 6s\n");
-  start_periodic_measurement();
+  if (start_periodic_measurement() != 0) {
+    exit(1);
+  }
   sleep(6);
 
   char mqtt_client_id[32];
@@ -87,68 +100,133 @@ int main(void) {
   char topic[64];
 
   struct mosquitto* mosq = NULL;
-  mosquitto_lib_init();
+  if (mosquitto_lib_init() != MOSQ_ERR_SUCCESS) {
+    fprintf(stderr, "mqtt:failed to init mosquitto lib\n");
+    exit(1);
+  }
   mosq = mosquitto_new(mqtt_client_id, true, NULL);
   if (!mosq) {
-    printf("mqtt:failed to create client!\n");
+    fprintf(stderr, "mqtt:failed to create client!\n");
     mosquitto_lib_cleanup();
-    return 1;
+    exit(1);
   }
-  mosquitto_username_pw_set(mosq, mqtt_username, mqtt_password);
-  if (mosquitto_connect(mosq, mqtt_host, mqtt_port, mqtt_keep_alive)) {
+  if (mosquitto_username_pw_set(mosq, mqtt_username, mqtt_password) !=
+      MOSQ_ERR_SUCCESS) {
+    fprintf(stderr, "mqtt:failed set username password\n");
+    mosquitto_lib_cleanup();
+    exit(1);
+  }
+  if (mosquitto_connect(mosq, mqtt_host, mqtt_port, mqtt_keep_alive) !=
+      MOSQ_ERR_SUCCESS) {
     fprintf(stderr, "mqtt:Unable to connect.\n");
-    return 1;
+    mosquitto_lib_cleanup();
+    exit(1);
   }
 
-  int loop = mosquitto_loop_start(mosq);
-  if (loop != MOSQ_ERR_SUCCESS) {
-    printf("mqtt:mosquitto loop error\n");
-    return 1;
+  if (mosquitto_loop_start(mosq) != MOSQ_ERR_SUCCESS) {
+    fprintf(stderr, "mqtt:failed to start mosquitto loop\n");
+    mosquitto_lib_cleanup();
+    exit(1);
   }
 
   sprintf(topic, "homeassistant/sensor/%s/LWT", mqtt_client_id);
   sprintf(buff, "Offline");
   printf("mqtt:will_topic='%s',msg='%s'\n", topic, buff);
-  mosquitto_will_set(mosq, topic, strlen(buff), buff, 0, 0);
+  if (mosquitto_will_set(mosq, topic, strlen(buff), buff, 0, 0) !=
+      MOSQ_ERR_SUCCESS) {
+    fprintf(stderr, "mqtt:failed to set will message\n");
+    mosquitto_lib_cleanup();
+    exit(1);
+  }
   sleep(1);
 
   sprintf(topic, "homeassistant/sensor/%s/LWT", mqtt_client_id);
   sprintf(buff, "Online");
   printf("mqtt:topic='%s',msg='%s'\n", topic, buff);
-  mosquitto_will_set(mosq, topic, strlen(buff), buff, 0, 0);
+  if (mosquitto_will_set(mosq, topic, strlen(buff), buff, 0, 0) !=
+      MOSQ_ERR_SUCCESS) {
+    fprintf(stderr, "mqtt:failed to set will message\n");
+    mosquitto_lib_cleanup();
+    exit(1);
+  }
   sleep(1);
 
   sprintf(topic, "homeassistant/sensor/%s_CO2/config", mqtt_client_id);
-  sprintf(buff, "{\"device_class\":\"carbon_dioxide\",\"name\":\"CO2 Concentration\",\"state_class\":\"measurement\",\"unique_id\":\"%s_CO2\",\"state_topic\":\"homeassistant/sensor/%s/state\",\"unit_of_measurement\":\"ppm\",\"value_template\":\"{{ value_json.co2_concentration }}\"}", mqtt_client_id, mqtt_client_id);
+  sprintf(buff,
+          "{\"device_class\":\"carbon_dioxide\",\"name\":\"CO2 "
+          "Concentration\",\"state_class\":\"measurement\",\"unique_id\":\"%s_"
+          "CO2\",\"state_topic\":\"homeassistant/sensor/%s/"
+          "state\",\"unit_of_measurement\":\"ppm\",\"value_template\":\"{{ "
+          "value_json.co2_concentration }}\"}",
+          mqtt_client_id, mqtt_client_id);
   printf("mqtt:topic='%s',msg='%s'\n", topic, buff);
-  mosquitto_publish(mosq, NULL, topic, strlen(buff), buff, 0, 0);
+  if (mosquitto_publish(mosq, NULL, topic, strlen(buff), buff, 0, 0) !=
+      MOSQ_ERR_SUCCESS) {
+    fprintf(stderr, "mqtt:failed to publish\n");
+    mosquitto_lib_cleanup();
+    exit(1);
+  }
   sleep(1);
 
   sprintf(topic, "homeassistant/sensor/%s_T/config", mqtt_client_id);
-  sprintf(buff, "{\"device_class\":\"temperature\",\"name\":\"Temperature\",\"state_class\":\"measurement\",\"unique_id\":\"%s_T\",\"state_topic\":\"homeassistant/sensor/%s/state\",\"unit_of_measurement\":\"°C\",\"value_template\":\"{{ value_json.temperature }}\"}", mqtt_client_id, mqtt_client_id);
+  sprintf(buff,
+          "{\"device_class\":\"temperature\",\"name\":\"Temperature\",\"state_"
+          "class\":\"measurement\",\"unique_id\":\"%s_T\",\"state_topic\":"
+          "\"homeassistant/sensor/%s/"
+          "state\",\"unit_of_measurement\":\"°C\",\"value_template\":\"{{ "
+          "value_json.temperature }}\"}",
+          mqtt_client_id, mqtt_client_id);
   printf("mqtt:topic='%s',msg='%s'\n", topic, buff);
-  mosquitto_publish(mosq, NULL, topic, strlen(buff), buff, 0, 0);
+  if (mosquitto_publish(mosq, NULL, topic, strlen(buff), buff, 0, 0) !=
+      MOSQ_ERR_SUCCESS) {
+    fprintf(stderr, "mqtt:failed to publish\n");
+    mosquitto_lib_cleanup();
+    exit(1);
+  }
   sleep(1);
 
   sprintf(topic, "homeassistant/sensor/%s_RH/config", mqtt_client_id);
-  sprintf(buff, "{\"device_class\":\"humidity\",\"name\":\"Relative Humidity\",\"state_class\":\"measurement\",\"unique_id\":\"%s_RH\",\"state_topic\":\"homeassistant/sensor/%s/state\",\"unit_of_measurement\":\"%%\",\"value_template\":\"{{ value_json.relative_humidity }}\"}", mqtt_client_id, mqtt_client_id);
+  sprintf(buff,
+          "{\"device_class\":\"humidity\",\"name\":\"Relative "
+          "Humidity\",\"state_class\":\"measurement\",\"unique_id\":\"%s_RH\","
+          "\"state_topic\":\"homeassistant/sensor/%s/"
+          "state\",\"unit_of_measurement\":\"%%\",\"value_template\":\"{{ "
+          "value_json.relative_humidity }}\"}",
+          mqtt_client_id, mqtt_client_id);
   printf("mqtt:topic='%s',msg='%s'\n", topic, buff);
-  mosquitto_publish(mosq, NULL, topic, strlen(buff), buff, 0, 0);
+  if (mosquitto_publish(mosq, NULL, topic, strlen(buff), buff, 0, 0) !=
+      MOSQ_ERR_SUCCESS) {
+    fprintf(stderr, "mqtt:failed to publish\n");
+    mosquitto_lib_cleanup();
+    exit(1);
+  }
   sleep(1);
 
   sprintf(topic, "homeassistant/sensor/%s_ts/config", mqtt_client_id);
-  sprintf(buff, "{\"device_class\":\"timestamp\",\"name\":\"Timestamp\",\"unique_id\":\"%s_ts\",\"state_topic\":\"homeassistant/sensor/%s/state\",\"unit_of_measurement\":\"\",\"value_template\":\"{{ value_json.timestamp }}\"}", mqtt_client_id, mqtt_client_id);
+  sprintf(buff,
+          "{\"device_class\":\"timestamp\",\"name\":\"Timestamp\",\"unique_"
+          "id\":\"%s_ts\",\"state_topic\":\"homeassistant/sensor/%s/"
+          "state\",\"unit_of_measurement\":\"\",\"value_template\":\"{{ "
+          "value_json.timestamp }}\"}",
+          mqtt_client_id, mqtt_client_id);
   printf("mqtt:topic='%s',msg='%s'\n", topic, buff);
-  mosquitto_publish(mosq, NULL, topic, strlen(buff), buff, 0, 0);
+  if (mosquitto_publish(mosq, NULL, topic, strlen(buff), buff, 0, 0) !=
+      MOSQ_ERR_SUCCESS) {
+    fprintf(stderr, "mqtt:failed to publish\n");
+    mosquitto_lib_cleanup();
+    exit(1);
+  }
   sleep(1);
-
 
   __u16 co2_concentration;
   float temperature;
   float relative_humidity;
   time_t now;
   while (1) {
-    read_measurement(&co2_concentration, &temperature, &relative_humidity);
+    if (read_measurement(&co2_concentration, &temperature,
+                         &relative_humidity) != 0) {
+      exit(1);
+    }
     time(&now);
     char timestr[21];
     sprintf(topic, "homeassistant/sensor/%s/state", mqtt_client_id);
@@ -158,7 +236,16 @@ int main(void) {
             "\"relative_humidity\":%f}",
             timestr, co2_concentration, temperature, relative_humidity);
     printf("mqtt:topic='%s',msg='%s'\n", topic, buff);
-    mosquitto_publish(mosq, NULL, topic, strlen(buff), buff, 0, 0);
+    int err = mosquitto_publish(mosq, NULL, topic, strlen(buff), buff, 0, 0);
+    if (err != MOSQ_ERR_SUCCESS) {
+      fprintf(stderr, "mqtt:failed to publish\n");
+      if (err == MOSQ_ERR_NO_CONN) {
+        fprintf(stderr, "mqtt:not connected\n");
+      } else {
+        fprintf(stderr, "mqtt: %d\n", err);
+        exit(1);
+      }
+    }
     sleep(5);
   }
 }
