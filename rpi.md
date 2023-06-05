@@ -1,6 +1,6 @@
 # CO_2 senor on Raspberry Pi with MQTT and Home Assistant integration
 
-I read from [ref](https://news.ycombinator.com/item?id=34648021) that a slightly high CO_2 (carbon dioxide) concentration may decrease some people's cognitive function, like, 1200ppm (parts per million) results in 15% of decrease or so. Since I am staying in my bedroom in the most of time and I don't have a good habbit of regular ventilation, I believe a CO_2 sensor and an alert system may help me get out of any gloomy states. I have a Raspberry Pi 1b at hand, so I can use it to read measurement from a CO_2 sensor. It turns out it takes much much more efforts to get the 11-years-old Raspberry Pi to connect to the WiFi. I put this failure part at the end of this post.
+I read from hacker news ([ref](https://news.ycombinator.com/item?id=34648021)) and related posts that a slightly high CO_2 (carbon dioxide) concentration may decrease some people's cognitive function, like, 1200ppm (parts per million) results in 15% of decrease or so. Since I am staying in my bedroom in the most of time and I don't have a good habbit of regular ventilation, I believe a CO_2 sensor and an alert system may help me get out of any gloomy states. I have a Raspberry Pi 1b at hand, so I can use it to read measurement from a CO_2 sensor. It turns out it takes much much more efforts to get the 11-years-old Raspberry Pi to connect to the WiFi. I put this failure part at the end of this post.
 
 ![pending picture final results]()
 
@@ -20,13 +20,13 @@ The first thing to do is to get my Raspberry Pi connected to the Internet, after
 
 Install dhcpd:
 
-``` bash
+```bash
 pacman -S dhcp
 ```
 
 Add static IP for ethernet adapter:
 
-``` bash
+```bash
 ip addr add 192.168.155.1/24 dev enp8s0
 ```
 
@@ -34,13 +34,13 @@ ip addr add 192.168.155.1/24 dev enp8s0
 
 Backup dhcpd config:
 
-``` bash
+```bash
 cp /etc/dhcpd.conf /etc/dhcpd.conf.example
 ```
 
 Add dhcp service configuration:
 
-``` conf
+```conf
 /etc/dhcpd.conf
 ---
 
@@ -60,7 +60,7 @@ subnet 192.168.2.0 netmask 255.255.255.0 {
 
 Start dhcpd service:
 
-``` bash
+```bash
 systemctl enable dhcpd4
 systemctl start dhcpd4
 ```
@@ -69,7 +69,7 @@ The two devices shoud be able to ping each other now.
 
 Share the Internet:
 
-``` bash
+```bash
 echo "1" > /proc/sys/net/ipv4/ip_forward
 ```
 
@@ -77,7 +77,7 @@ Add `net.ipv4.ip_forward=1` to `/etc/sysctl.conf` to make this change permanent
 
 Enable NAT with `iptables`:
 
-``` bash
+```bash
 iptables -F
 iptables -P INPUT ACCEPT
 iptables -P FORWARD ACCEPT
@@ -113,7 +113,7 @@ First enable I2C on Raspberry Pi in `sudo raspi-config`, connect the sensor to c
 
 Then we can see the SCD41 sensor at address `0x62`:
 
-``` bash
+```bash
 ls /dev/i2c*
 apt install i2c-tools
 i2cdetect 0
@@ -381,14 +381,29 @@ Adding prometheus support on Home Assistant is simple, just add a line of `prome
 
 ![pending screenshot grafana]()
 
-Once the data are in Prometheus' database, we can query them from Grafana
+Once the data are in Prometheus' database, we can query them from Grafana.
+
+## Postscript
+
+When I read the metric for the first time, it was around 2500ppm. I doubted whether I was reading something else but the CRC is correct and temperature and relative humidity readings looked accurate. Then I realized that I was in a 16m^2 room which hasn't been ventilized for days. I opened the door and the window, and swiched on a fan to blow the air outside of the door. Within 10 minutes the CO_2 reading decreased to about 420ppm, meanwhile the temperature decreased 5°C. As to me? I felt only cold. It turned out that I'm not sensitive to CO_2 concentration at all. I can remember it happened several times when some friend entered the room I stay and asked me to open the window because they felt stuffy. I thought that was a polite way of disguising the excuse to mention the bad odor (Maybe there was indeed bad odor, who knows). So the CO_2 concentration doesn't decrease my cognitive function. It doesn't function well no matter the CO_2 concentration.
+
+Some obversations: 
+
+- When the window and door are closed and nobody is in the room, if we put temperature and relative humidity readings together, with proper scale and range, the two curves are usually symetric. This is because when the amount of water in the air doesn't change, relative humidity is decided by water's vapor pressure, which in this case only related to temperature. So based on some calculations maybe we can figure out how much water is brought into or out of the room. This change usually relates to number of people in the room and when I took shower (I bring a wet towel back). 
+
+![temp rh cor]()
+
+- If I only open the window but not the door, the CO_2 concentration can go up to 800ppm. I'm not sure it is good enough but it's far better than 2000+ppm when both door and window are shut. 
+- When nobody is in the room, the CO_2 concentration will also decrease to under 500ppm quite fast (but hours instead of minutes). I believe it's not because of the only two little plants. That must be the reason why I haven't suffocated yet.
+
+Anyway regular ventilation is a good habbit. I should do so no matther I feel stuffy or not.
 
 ## Appendix: How not to configure WiFi adapter for Raspberry Pi (this chapter is full of failures and can be skipped. )
 this chapter is full of failures and can be skipped. I leave it here just in case some one wants to give a try and can use some of the information. 
 
 To connect to internet from my room, I hoped to use a wireless adapter. I bought several different adapters but at last none of them worked. After several days trying, I finally gave up on this.
 ### drivers from source
-https://github.com/fastoe drivers doesn't work on RPi1b
+https://github.com/fastoe drivers doesn't work on RPi1b. 
 
 ### precompiled drivers
 - using http://downloads.fars-robotics.net/wifi-drivers/8822bu-drivers/
