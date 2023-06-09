@@ -228,20 +228,23 @@ Then we can implement all the funtions of SCD41 happily:
 
 ```c
 int start_periodic_measurement();
-int read_measurement(__u16* co2_concentration, float* temperature, float* relative_humidity);
+int read_measurement(__u16* co2_concentration, float* temperature,
+                     float* relative_humidity);
 int stop_periodic_measurement();
 int set_temperature_offset(float temperature_offset);
 int get_temperature_offset(float* temperature_offset);
 int set_sensor_altitude(__u16 altitude);
 int get_sensor_altitude(__u16* altitude);
 int set_ambient_pressure(__u16 ambient_pressure);
-int perform_forced_recalibration(__u16 target_co2_concentration, __u16* frc_correction);
+int perform_forced_recalibration(__u16 target_co2_concentration,
+                                 __u16* frc_correction);
 int set_automatic_self_calibration_enabled(__u16 asc_enabled);
 int get_automatic_self_calibration_enabled(__u16* asc_enabled);
 int start_low_power_periodic_measurement();
 int get_data_ready_status(__u16* signal);
 int persist_settings();
-int get_serial_number(__u16* serial_number_0, __u16* serial_number_1, __u16* serial_number_2);
+int get_serial_number(__u16* serial_number_0, __u16* serial_number_1,
+                      __u16* serial_number_2);
 int perform_self_test(__u16* sensor_status);
 int perform_factory_reset();
 int reinit();
@@ -255,12 +258,14 @@ Note: Combined transactions of mixing read and write messages are not supported(
 Now we can read our sensor data:
 
 ```c
-char buff[512]
+char buff[512];
 __u16 co2_concentration;
 float temperature;
 float relative_humidity;
-read_measurement(&co2_concentration, &temperature, &relative_humidity);
-sprintf(buff, "CO_2=%dppm,T=%fC,RH=%f%%\n", co2_concentration, temperature, relative_humidity);
+read_measurement(&amp; co2_concentration, &amp; temperature, &amp;
+                 relative_humidity);
+sprintf(buff, "CO_2=%dppm,T=%fC,RH=%f%%\n", co2_concentration, temperature,
+        relative_humidity);
 printf("%s", buff);
 ```
 
@@ -395,6 +400,7 @@ Some obversations:
 
 - If I only open the window but not the door, the CO_2 concentration can go up to 800ppm. I'm not sure it is good enough but it's far better than 2000+ppm when both door and window are shut. 
 - When nobody is in the room, the CO_2 concentration will also decrease to under 500ppm quite fast (but hours instead of minutes). I believe it's not because of the only two little plants. That must be the reason why I haven't suffocated yet.
+- At last I have 3 temperature / relative humidity sensors at hand. No two of them have equal reading, and I have no method for calibration. Withstanding the inaccuracy and acquire information from noisy readings is a necessary ability. 
 
 Anyway regular ventilation is a good habbit. I should do so no matther I feel stuffy or not.
 
@@ -402,10 +408,10 @@ Anyway regular ventilation is a good habbit. I should do so no matther I feel st
 this chapter is full of failures and can be skipped. I leave it here just in case some one wants to give a try and can use some of the information. 
 
 To connect to internet from my room, I hoped to use a wireless adapter. I bought several different adapters but at last none of them worked. After several days trying, I finally gave up on this.
-### drivers from source
+### drivers from source (failed)
 https://github.com/fastoe drivers doesn't work on RPi1b. 
 
-### precompiled drivers
+### precompiled drivers (failed)
 - using http://downloads.fars-robotics.net/wifi-drivers/8822bu-drivers/
 
 - downgrade kernel to 5.10.73+ with `rpi-update 9fe1e973b550019bd6a87966db8443a70b991129` ([ref](https://github.com/Hexxeh/rpi-firmware/blob/9fe1e973b550019bd6a87966db8443a70b991129/uname_string), [ref](https://raspberrypi.stackexchange.com/questions/19959/how-to-get-a-specific-kernel-version-for-raspberry-pi-linux))
@@ -420,11 +426,11 @@ install-wifi
 
 Failed. system hang after wlan0 read
 
-### older kernel with precompiled drivers
+### older kernel with precompiled drivers (failed)
 - image from https://downloads.raspberrypi.org/raspbian_lite/images/raspbian_lite-2020-02-14/
 - using `dd` to flash image
 - using `parted` to resize partition to avoid wasting space
 - using `e2fsck -f` and `resize2fs` to make size valid
 - boot into rpi
 - repeat last chapter
-result: wlan0 appears but cannot be brought up.
+- result: wlan0 appears but cannot be brought up.
