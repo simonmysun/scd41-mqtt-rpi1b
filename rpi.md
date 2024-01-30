@@ -253,7 +253,11 @@ int measure_single_shot();
 int measure_single_shot_rht_only();
 ```
 
-Note: Combined transactions of mixing read and write messages are not supported(search for 'combined transactions' in [ref](https://www.kernel.org/doc/Documentation/i2c/dev-interface)). But I currently don't have much need to do so. Will fix it in the future.
+Note: Combined transactions of mixing read and write messages are not supported. 
+
+> Note that only a subset of the I2C and SMBus protocols can be achieved by the means of read() and write() calls. In particular, so-called combined transactions (mixing read and write messages in the same transaction) aren't supported. For this reason, this interface is almost never used by user-space programs. [ref](https://www.kernel.org/doc/Documentation/i2c/dev-interface)
+
+But I currently don't have much need to do so. Will fix it in the future.
 
 Now we can read our sensor data:
 
