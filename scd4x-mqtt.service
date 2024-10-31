@@ -8,7 +8,7 @@ Type=simple
 Restart=always
 RestartSec=1
 User=mysun
-ExecStart=/usr/bin/env bash /home/mysun/git/scd41-mqtt-rpi1b/run.sh
+ExecStart=/usr/local/bin/scd4x-mqtt
 Environment="MQTT_HOST="
 Environment="MQTT_PORT="
 Environment="MQTT_USERNAME="
