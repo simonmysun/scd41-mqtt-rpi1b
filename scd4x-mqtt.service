@@ -9,6 +9,10 @@ Restart=always
 RestartSec=1
 User=mysun
 ExecStart=/usr/bin/env bash /home/mysun/git/scd41-mqtt-rpi1b/run.sh
+Environment="MQTT_HOST="
+Environment="MQTT_PORT="
+Environment="MQTT_USERNAME="
+Environment="MQTT_PASSWORD="
 
 [Install]
 WantedBy=multi-user.target
