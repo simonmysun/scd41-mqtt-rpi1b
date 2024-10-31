@@ -1,0 +1,14 @@
+[Unit]
+Description=SCD4x to MQTT on Raspberry Pi 1b
+After=network.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=1
+User=mysun
+ExecStart=/usr/bin/env bash /home/mysun/git/scd41-mqtt-rpi1b/run.sh
+
+[Install]
+WantedBy=multi-user.target

@@ -1,4 +1,4 @@
-set -o allexport; source .env; set +o allexport
+set -o allexport; source "${BASH_SOURCE%/*}/.env"; set +o allexport
 
-./main
+"${BASH_SOURCE%/*}/main"
 
